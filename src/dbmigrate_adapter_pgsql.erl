@@ -5,7 +5,9 @@
 %% API
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_start/1, transaction_end/1, file_template/1]).
+         transaction_begin/1, transaction_commit/1,
+         acquire_lock/1, release_lock/1,
+         file_template/1]).
 
 %%%===================================================================
 %%% API
@@ -176,12 +178,21 @@ migrations_downgrade(Conn, Version) ->
                       [Version]),
     ok.
 
-transaction_start(Conn) ->
+transaction_begin(Conn) ->
     {ok, _, _} = epgsql:squery(Conn, "BEGIN;"),
     ok.
 
-transaction_end(Conn) ->
+transaction_commit(Conn) ->
     {ok, _, _} = epgsql:squery(Conn, "COMMIT;"),
+    ok.
+
+%% Advisory lock using a fixed key derived from 'dbmigrate'.
+acquire_lock(Conn) ->
+    {ok, _, [{true}]} = epgsql:squery(Conn, "SELECT pg_advisory_lock(73571);"),
+    ok.
+
+release_lock(Conn) ->
+    {ok, _, [{true}]} = epgsql:squery(Conn, "SELECT pg_advisory_unlock(73571);"),
     ok.
 
 file_template(FileName) ->

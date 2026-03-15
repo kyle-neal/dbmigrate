@@ -6,7 +6,7 @@
 
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_start/1, transaction_end/1, file_template/1]).
+         transaction_begin/1, transaction_commit/1, file_template/1]).
 
 -record(es_info, {erls_params, index_name, type_name, migration_index}).
 
@@ -94,10 +94,10 @@ migrations_downgrade(#es_info{erls_params = Params,
     {ok, _} = erlastic_search:delete_doc_by_query_doc(Params, IndexName, TypeName, Doc),
     ok.
 
-transaction_start(_Conn) ->
+transaction_begin(_Conn) ->
     ok.
 
-transaction_end(_Conn) ->
+transaction_commit(_Conn) ->
     ok.
 
 file_template(FileName) ->
