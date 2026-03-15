@@ -268,8 +268,8 @@ migrations_apply_one(#{adapter := Adapter,
                        migrations_not_applied := [Version | NotApplied],
                        migrations_applied := Applied} =
                          Env) ->
-        Run = migration_run_fn(),
-        ok = Run(Conn, Version, Path),
+    Run = migration_run_fn(),
+    ok = Run(Conn, Version, Path),
     ok = Adapter:migrations_upgrade(Conn, Version, AppName, Type, AppVersion),
     {ok,
      [Version],
