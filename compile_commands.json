@@ -1,0 +1,6 @@
+[
+{ "file"      : "c_src/re2_nif.cc"
+, "directory" : "/opt/dbmigrate/_build/default/lib/re2"
+, "command"   : "c++ -c -include cstdint -g -Wall -fPIC -MMD -I\"/home/spawn/.asdf/installs/erlang/28.3/lib/erl_interface-5.6.2/include\" -I\"/home/spawn/.asdf/installs/erlang/28.3/erts-16.2/include\" -std=c++11 -Wall -Wextra -Wpedantic -O3 -Ic_src/re2 c_src/re2_nif.cc -o c_src/re2_nif.o"
+}
+]
