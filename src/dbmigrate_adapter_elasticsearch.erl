@@ -6,9 +6,18 @@
 
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_begin/1, transaction_commit/1, file_template/1]).
+         transaction_begin/1, transaction_commit/1, transaction_start/1, transaction_end/1,
+         acquire_lock/1, release_lock/1, file_template/1]).
 
 -record(es_info, {erls_params, index_name, type_name, migration_index}).
+
+-define(DEFAULT_MIGRATIONS_INDEX, "schema_migrations").
+
+-ifdef(TEST).
+
+-export([configured_migration_index/1]).
+
+-endif.
 
 init() ->
     ok.
@@ -19,7 +28,7 @@ connect(App, DbName) ->
 
     IndexName = proplists:get_value(index_name, AppOpts),
     TypeName = proplists:get_value(type_name, AppOpts),
-    MigrationIndex = proplists:get_value(migrations_index, AppOpts),
+    MigrationIndex = configured_migration_index(AppOpts),
     Host = proplists:get_value(host, AppOpts),
     Port = proplists:get_value(port, AppOpts),
     #es_info{erls_params = #erls_params{host = Host, port = Port},
@@ -87,17 +96,29 @@ migrations_upgrade(#es_info{erls_params = Params,
     ok.
 
 migrations_downgrade(#es_info{erls_params = Params,
-                              index_name = IndexName,
+                              migration_index = MigrationIndex,
                               type_name = TypeName},
                      Version) ->
     Doc = [{query, [{match, [{version, Version}]}]}],
-    {ok, _} = erlastic_search:delete_doc_by_query_doc(Params, IndexName, TypeName, Doc),
+    {ok, _} = erlastic_search:delete_doc_by_query_doc(Params, MigrationIndex, TypeName, Doc),
     ok.
 
 transaction_begin(_Conn) ->
     ok.
 
 transaction_commit(_Conn) ->
+    ok.
+
+transaction_start(_Conn) ->
+    ok.
+
+transaction_end(_Conn) ->
+    ok.
+
+acquire_lock(_Conn) ->
+    ok.
+
+release_lock(_Conn) ->
     ok.
 
 file_template(FileName) ->
@@ -128,6 +149,13 @@ file_template(FileName) ->
 get_versions_sorted(Rows) ->
     Versions = [binary_to_list(maps:get(<<"version">>, Row)) || Row <- Rows],
     {ok, lists:sort(Versions)}.
+
+configured_migration_index(AppOpts) ->
+    normalize_repo_name(proplists:get_value(migrations_index,
+                                            AppOpts,
+                                            proplists:get_value(migrations_table,
+                                                                AppOpts,
+                                                                ?DEFAULT_MIGRATIONS_INDEX))).
 
 get_all_migrations_applied(#es_info{erls_params = Params,
                                     migration_index = MigrationIndex}) ->
@@ -167,3 +195,10 @@ check_app_version_match(AppVersion) ->
 
 filter_by_fns(Rows, Fns) ->
     lists:filter(fun(Row) -> lists:all(fun(Fn) -> Fn(Row) end, Fns) end, Rows).
+
+normalize_repo_name(Name) when is_binary(Name) ->
+    binary_to_list(Name);
+normalize_repo_name(Name) when is_atom(Name) ->
+    atom_to_list(Name);
+normalize_repo_name(Name) ->
+    Name.

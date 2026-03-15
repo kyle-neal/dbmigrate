@@ -1,7 +1,7 @@
 {application,
  dbmigrate,
  [{description, "DB Migrate Tool"},
-  {vsn, "1.0.0"},
+  {vsn, "1.0.1"},
   {modules, []},
   {registered, []},
   {applications,

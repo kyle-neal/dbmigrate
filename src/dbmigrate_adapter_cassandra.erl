@@ -4,9 +4,19 @@
 
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_begin/1, transaction_commit/1, file_template/1]).
+         transaction_begin/1, transaction_commit/1, transaction_start/1, transaction_end/1,
+         acquire_lock/1, release_lock/1, file_template/1]).
 
 -include_lib("cqerl/include/cqerl.hrl").
+
+-define(DEFAULT_MIGRATIONS_TABLE, "schema_migrations").
+
+-ifdef(TEST).
+
+-export([configured_migrations_table/1, migrations_table_name/1, store_migrations_table/2,
+         erase_migrations_table/1]).
+
+-endif.
 
 init() ->
     {ok, _} = application:ensure_all_started(cqerl),
@@ -17,22 +27,28 @@ connect(App, DbName) ->
     Host = proplists:get_value(host, AppOpts),
     Port = proplists:get_value(port, AppOpts),
     Keyspace = proplists:get_value(keyspace, AppOpts),
+    MigrationsTable = configured_migrations_table(AppOpts),
     {ok, Client} = cqerl:get_client({Host, Port}, [{keyspace, Keyspace}]),
+    ok = store_migrations_table(Client, MigrationsTable),
     Client.
 
-close(_Conn) ->
+close(Conn) ->
+    ok = erase_migrations_table(Conn),
     ok.
 
 ensure_repo(App, Db) ->
     Conn = connect(App, Db),
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _} =
         cqerl:run_query(Conn,
-                        "CREATE TABLE IF NOT EXISTS schema_migrations ("
-                        " version text PRIMARY KEY,"
-                        " inserted_at TIMESTAMP,"
-                        " app_name text,"
-                        " app_version text,"
-                        " type text)"),
+                        lists:flatten(["CREATE TABLE IF NOT EXISTS ",
+                                       MigrationsTable,
+                                       " ("
+                                       " version text PRIMARY KEY,"
+                                       " inserted_at TIMESTAMP,"
+                                       " app_name text,"
+                                       " app_version text,"
+                                       " type text)"])),
     close(Conn).
 
 migrations_applied(Conn, AppName, Type) ->
@@ -62,9 +78,11 @@ migrations_applied_by_version(Conn, AppName, Type, AppVersion) ->
 
 migrations_upgrade(Conn, Version, AppName, Type, AppVersionOverwrite) ->
     AppVsn = dbmigrate_utils:get_app_version(AppName, AppVersionOverwrite),
+    MigrationsTable = migrations_table_name(Conn),
     CqlQuery =
         #cql_query{statement =
-                       ["INSERT INTO schema_migrations",
+                       ["INSERT INTO ",
+                        MigrationsTable,
                         " (version, inserted_at, app_name, app_version, type)",
                         " VALUES(?, toTimestamp(now()), ?, ?, ?);"],
                    values =
@@ -76,8 +94,9 @@ migrations_upgrade(Conn, Version, AppName, Type, AppVersionOverwrite) ->
     ok.
 
 migrations_downgrade(Conn, Version) ->
+    MigrationsTable = migrations_table_name(Conn),
     CqlQuery =
-        #cql_query{statement = ["DELETE FROM schema_migrations", " WHERE version = ?;"],
+        #cql_query{statement = ["DELETE FROM ", MigrationsTable, " WHERE version = ?;"],
                    values = [{version, Version}]},
     {ok, void} = cqerl:run_query(Conn, CqlQuery),
     ok.
@@ -86,6 +105,18 @@ transaction_begin(_Conn) ->
     ok.
 
 transaction_commit(_Conn) ->
+    ok.
+
+transaction_start(_Conn) ->
+    ok.
+
+transaction_end(_Conn) ->
+    ok.
+
+acquire_lock(_Conn) ->
+    ok.
+
+release_lock(_Conn) ->
     ok.
 
 file_template(FileName) ->
@@ -110,10 +141,33 @@ get_versions_sorted(Rows) ->
     Versions = [binary_to_list(proplists:get_value(version, Row)) || Row <- Rows],
     {ok, lists:sort(Versions)}.
 
+configured_migrations_table(AppOpts) ->
+    normalize_repo_name(proplists:get_value(migrations_table,
+                                            AppOpts,
+                                            ?DEFAULT_MIGRATIONS_TABLE)).
+
+migrations_table_name(Conn) ->
+    case get({?MODULE, migrations_table, Conn}) of
+        undefined ->
+            ?DEFAULT_MIGRATIONS_TABLE;
+        MigrationsTable ->
+            MigrationsTable
+    end.
+
+store_migrations_table(Conn, MigrationsTable) ->
+    put({?MODULE, migrations_table, Conn}, normalize_repo_name(MigrationsTable)),
+    ok.
+
+erase_migrations_table(Conn) ->
+    erase({?MODULE, migrations_table, Conn}),
+    ok.
+
 get_all_migrations_applied(Conn) ->
+    MigrationsTable = migrations_table_name(Conn),
     {ok, CqlResult} =
         cqerl:run_query(Conn,
-                        "SELECT version, app_name, type, app_version FROM schema_migrations"),
+                        lists:flatten(["SELECT version, app_name, type, app_version FROM ",
+                                       MigrationsTable])),
     do_get_all_migrations_applied(cqerl:all_rows(CqlResult), CqlResult).
 
 do_get_all_migrations_applied([], _CqlResult) ->
@@ -154,3 +208,10 @@ check_app_version_match(AppVersion) ->
 
 filter_by_fns(Rows, Fns) ->
     lists:filter(fun(Row) -> lists:all(fun(Fn) -> Fn(Row) end, Fns) end, Rows).
+
+normalize_repo_name(Name) when is_binary(Name) ->
+    binary_to_list(Name);
+normalize_repo_name(Name) when is_atom(Name) ->
+    atom_to_list(Name);
+normalize_repo_name(Name) ->
+    Name.
