@@ -6,13 +6,13 @@
 %% This module shields the runner from the details of how each backend
 %% stores its schema_migrations data.
 
--export([fetch_applied/4,
-         fetch_applied_by_version/5,
-         record_applied/6,
+-export([fetch_applied/4, fetch_applied_by_version/5, record_applied/6,
          record_removed/3]).
 
 -ifdef(TEST).
+
 -compile([export_all]).
+
 -endif.
 
 %% @doc Return a sorted list of version strings that have been applied.
@@ -26,7 +26,8 @@ fetch_applied_by_version(Adapter, Conn, App, Backend, AppVersion) ->
     Adapter:migrations_applied_by_version(Conn, App, Backend, AppVersion).
 
 %% @doc Record a migration as applied.
--spec record_applied(module(), term(), string(), atom(), atom(), string() | undefined) -> ok.
+-spec record_applied(module(), term(), string(), atom(), atom(), string() | undefined) ->
+                        ok.
 record_applied(Adapter, Conn, Version, App, Backend, AppVersion) ->
     Adapter:migrations_upgrade(Conn, Version, App, Backend, AppVersion).
 

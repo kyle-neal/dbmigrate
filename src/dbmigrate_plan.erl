@@ -9,7 +9,9 @@
 -export([resolve/1]).
 
 -ifdef(TEST).
+
 -compile([export_all]).
+
 -endif.
 
 %% @doc Produce an execution plan from the current migration state.
@@ -26,25 +28,24 @@
 %%   {error, Reason}
 
 -spec resolve(map()) -> {ok, map()} | {error, term()}.
-
 %% --- Migrate ---------------------------------------------------------
 
 resolve(#{action := migrate, mode := all} = State) ->
     Pending = not_applied(State),
-    {ok, #{action => migrate,
-           selected => Pending,
-           pending => [],
-           applied => maps:get(migrations_applied, State)}};
-
+    {ok,
+     #{action => migrate,
+       selected => Pending,
+       pending => [],
+       applied => maps:get(migrations_applied, State)}};
 resolve(#{action := migrate, mode := {count, N}} = State) ->
     Pending = not_applied(State),
     Selected = lists:sublist(Pending, N),
     Remaining = lists:nthtail(length(Selected), Pending),
-    {ok, #{action => migrate,
-           selected => Selected,
-           pending => Remaining,
-           applied => maps:get(migrations_applied, State)}};
-
+    {ok,
+     #{action => migrate,
+       selected => Selected,
+       pending => Remaining,
+       applied => maps:get(migrations_applied, State)}};
 resolve(#{action := migrate, mode := {to, Target}} = State) ->
     Pending = not_applied(State),
     case lists:member(Target, Pending) of
@@ -53,30 +54,31 @@ resolve(#{action := migrate, mode := {to, Target}} = State) ->
         true ->
             Selected = take_up_to(Target, Pending),
             Remaining = lists:nthtail(length(Selected), Pending),
-            {ok, #{action => migrate,
-                   selected => Selected,
-                   pending => Remaining,
-                   applied => maps:get(migrations_applied, State)}}
+            {ok,
+             #{action => migrate,
+               selected => Selected,
+               pending => Remaining,
+               applied => maps:get(migrations_applied, State)}}
     end;
-
 resolve(#{action := migrate, mode := {specific, MigrationId}} = State) ->
-    {ok, #{action => migrate,
-           selected => [MigrationId],
-           pending => [],
-           applied => maps:get(migrations_applied, State)}};
-
+    {ok,
+     #{action => migrate,
+       selected => [MigrationId],
+       pending => [],
+       applied => maps:get(migrations_applied, State)}};
 %% --- Rollback --------------------------------------------------------
-
 resolve(#{action := rollback, mode := {count, N}} = State) ->
     Applied = maps:get(migrations_applied, State),
-    Reversed = lists:reverse(lists:sort(Applied)),
+    Reversed =
+        lists:reverse(
+            lists:sort(Applied)),
     Selected = lists:sublist(Reversed, N),
     Remaining = lists:nthtail(length(Selected), Reversed),
-    {ok, #{action => rollback,
-           selected => Selected,
-           pending => [],
-           applied => lists:reverse(Remaining)}};
-
+    {ok,
+     #{action => rollback,
+       selected => Selected,
+       pending => [],
+       applied => lists:reverse(Remaining)}};
 resolve(#{action := rollback, mode := {to, Target}} = State) ->
     Applied = maps:get(migrations_applied, State),
     Sorted = lists:sort(Applied),
@@ -88,32 +90,36 @@ resolve(#{action := rollback, mode := {to, Target}} = State) ->
             Reversed = lists:reverse(Sorted),
             Selected = take_up_to(Target, Reversed),
             RemainingApplied = lists:sort(Applied -- Selected),
-            {ok, #{action => rollback,
-                   selected => Selected,
-                   pending => [],
-                   applied => RemainingApplied}}
+            {ok,
+             #{action => rollback,
+               selected => Selected,
+               pending => [],
+               applied => RemainingApplied}}
     end;
-
 resolve(#{action := rollback, mode := app_version} = State) ->
     AppliedByVersion = maps:get(migrations_applied_by_version, State),
-    Reversed = lists:reverse(lists:sort(AppliedByVersion)),
+    Reversed =
+        lists:reverse(
+            lists:sort(AppliedByVersion)),
     Applied = maps:get(migrations_applied, State),
     RemainingApplied = lists:sort(Applied -- Reversed),
-    {ok, #{action => rollback,
-           selected => Reversed,
-           pending => [],
-           applied => RemainingApplied}}.
+    {ok,
+     #{action => rollback,
+       selected => Reversed,
+       pending => [],
+       applied => RemainingApplied}}.
 
 %%% -------------------------------------------------------------------
 %%% Internal helpers
 %%% -------------------------------------------------------------------
 
 %% Compute available minus applied, sorted.
-not_applied(#{migrations_available := Available,
-              migrations_applied := Applied}) ->
+not_applied(#{migrations_available := Available, migrations_applied := Applied}) ->
     AvailSet = sets:from_list(Available),
     AppliedSet = sets:from_list(Applied),
-    lists:sort(sets:to_list(sets:subtract(AvailSet, AppliedSet))).
+    lists:sort(
+        sets:to_list(
+            sets:subtract(AvailSet, AppliedSet))).
 
 %% Return all elements up to and including Target.
 take_up_to(Target, List) ->

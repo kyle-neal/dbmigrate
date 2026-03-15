@@ -6,19 +6,27 @@
 %%% Mock adapter callbacks used by the runner
 %%% ===================================================================
 
--export([transaction_begin/1, transaction_commit/1,
-         migrations_upgrade/5, migrations_downgrade/2]).
+-export([transaction_begin/1, transaction_commit/1, migrations_upgrade/5,
+         migrations_downgrade/2]).
 
-transaction_begin(_) -> ok.
-transaction_commit(_) -> ok.
-migrations_upgrade(_, _, _, _, _) -> ok.
-migrations_downgrade(_, _) -> ok.
+transaction_begin(_) ->
+    ok.
+
+transaction_commit(_) ->
+    ok.
+
+migrations_upgrade(_, _, _, _, _) ->
+    ok.
+
+migrations_downgrade(_, _) ->
+    ok.
 
 %%% ===================================================================
 %%% Helpers
 %%% ===================================================================
 
-noop_run(_Conn, _Version, _Path) -> ok.
+noop_run(_Conn, _Version, _Path) ->
+    ok.
 
 base_ctx(Action, Selected) ->
     #{adapter => ?MODULE,

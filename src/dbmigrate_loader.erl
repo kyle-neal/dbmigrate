@@ -5,14 +5,13 @@
 %% Scans a migrations directory, compiles each .erl file on demand,
 %% and returns a sorted list of migration version strings.
 
--export([migrations_path/2,
-         available/1,
-         compile_and_load/2,
-         generate_version/0,
+-export([migrations_path/2, available/1, compile_and_load/2, generate_version/0,
          underscore/1]).
 
 -ifdef(TEST).
+
 -compile([export_all]).
+
 -endif.
 
 %% @doc Resolve the filesystem path for migrations.
@@ -53,10 +52,10 @@ compile_and_load(Version, Path) ->
 -spec generate_version() -> string().
 generate_version() ->
     {{Y, M, D}, {H, MM, S}} =
-        calendar:now_to_datetime(os:timestamp()),
+        calendar:now_to_datetime(
+            os:timestamp()),
     lists:flatten(
-        io_lib:format("~.4.0w~.2.0w~.2.0w~.2.0w~.2.0w~.2.0w",
-                      [Y, M, D, H, MM, S])).
+        io_lib:format("~.4.0w~.2.0w~.2.0w~.2.0w~.2.0w~.2.0w", [Y, M, D, H, MM, S])).
 
 %% @doc Replace whitespace, hyphens, and commas with underscores.
 -spec underscore(string()) -> string().

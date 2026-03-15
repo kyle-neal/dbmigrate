@@ -12,7 +12,9 @@
 -export([execute/1]).
 
 -ifdef(TEST).
+
 -compile([export_all]).
+
 -endif.
 
 %% @doc Execute a resolved migration or rollback plan.
@@ -25,16 +27,12 @@
 %% Returns {ok, ProcessedVersions} or {error, Reason}.
 
 -spec execute(map()) -> {ok, [string()]} | {error, term()}.
-
 execute(#{action := migrate, selected := []} = _Ctx) ->
     {ok, []};
-
 execute(#{action := migrate, selected := Selected} = Ctx) ->
     wrap_transaction(Ctx, fun() -> run_migrations(Selected, Ctx, []) end);
-
 execute(#{action := rollback, selected := []} = _Ctx) ->
     {ok, []};
-
 execute(#{action := rollback, selected := Selected} = Ctx) ->
     wrap_transaction(Ctx, fun() -> run_rollbacks(Selected, Ctx, []) end).
 
@@ -44,18 +42,17 @@ execute(#{action := rollback, selected := Selected} = Ctx) ->
 
 run_migrations([], _Ctx, Acc) ->
     {ok, lists:reverse(Acc)};
-
 run_migrations([Version | Rest],
                #{skip_run := true,
                  adapter := Adapter,
                  conn := Conn,
                  app := App,
                  backend := Backend,
-                 app_version := AppVersion} = Ctx,
+                 app_version := AppVersion} =
+                   Ctx,
                Acc) ->
     ok = dbmigrate_registry:record_applied(Adapter, Conn, Version, App, Backend, AppVersion),
     run_migrations(Rest, Ctx, [Version | Acc]);
-
 run_migrations([Version | Rest],
                #{skip_run := false,
                  adapter := Adapter,
@@ -64,7 +61,8 @@ run_migrations([Version | Rest],
                  backend := Backend,
                  app_version := AppVersion,
                  migrations_path := Path,
-                 migration_run_fn := RunFn} = Ctx,
+                 migration_run_fn := RunFn} =
+                   Ctx,
                Acc) ->
     ok = RunFn(Conn, Version, Path),
     ok = dbmigrate_registry:record_applied(Adapter, Conn, Version, App, Backend, AppVersion),
@@ -76,12 +74,12 @@ run_migrations([Version | Rest],
 
 run_rollbacks([], _Ctx, Acc) ->
     {ok, lists:reverse(Acc)};
-
 run_rollbacks([Version | Rest],
               #{adapter := Adapter,
                 conn := Conn,
                 migrations_path := Path,
-                rollback_run_fn := RollbackFn} = Ctx,
+                rollback_run_fn := RollbackFn} =
+                  Ctx,
               Acc) ->
     ok = RollbackFn(Conn, Version, Path),
     ok = dbmigrate_registry:record_removed(Adapter, Conn, Version),

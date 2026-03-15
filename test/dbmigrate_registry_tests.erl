@@ -7,9 +7,7 @@
 %%% mock adapter module (this module itself) to capture calls.
 %%% ===================================================================
 
--export([migrations_applied/3,
-         migrations_applied_by_version/4,
-         migrations_upgrade/5,
+-export([migrations_applied/3, migrations_applied_by_version/4, migrations_upgrade/5,
          migrations_downgrade/2]).
 
 %% Mock implementations that return predictable values.
@@ -35,7 +33,8 @@ fetch_applied_test() ->
     ?assertEqual(["m1", "m2"], Result).
 
 fetch_applied_by_version_test() ->
-    Result = dbmigrate_registry:fetch_applied_by_version(?MODULE, fake_conn, myapp, pgsql, "1.0"),
+    Result =
+        dbmigrate_registry:fetch_applied_by_version(?MODULE, fake_conn, myapp, pgsql, "1.0"),
     ?assertEqual(["m2"], Result).
 
 record_applied_test() ->
@@ -43,5 +42,4 @@ record_applied_test() ->
                  dbmigrate_registry:record_applied(?MODULE, fake_conn, "m3", myapp, pgsql, "1.0")).
 
 record_removed_test() ->
-    ?assertEqual(ok,
-                 dbmigrate_registry:record_removed(?MODULE, fake_conn, "m2")).
+    ?assertEqual(ok, dbmigrate_registry:record_removed(?MODULE, fake_conn, "m2")).

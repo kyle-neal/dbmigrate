@@ -68,8 +68,8 @@ rollback_count_one_test() ->
     ?assertEqual(["m1", "m2"], maps:get(applied, Plan)).
 
 rollback_count_two_test() ->
-    State = base_state(rollback, {count, 2}, ["m1", "m2", "m3", "m4"],
-                       ["m1", "m2", "m3", "m4"]),
+    State =
+        base_state(rollback, {count, 2}, ["m1", "m2", "m3", "m4"], ["m1", "m2", "m3", "m4"]),
     {ok, Plan} = dbmigrate_plan:resolve(State),
     ?assertEqual(["m4", "m3"], maps:get(selected, Plan)),
     ?assertEqual(["m1", "m2"], maps:get(applied, Plan)).
@@ -80,8 +80,8 @@ rollback_count_nothing_applied_test() ->
     ?assertEqual([], maps:get(selected, Plan)).
 
 rollback_to_test() ->
-    State = base_state(rollback, {to, "m3"}, ["m1", "m2", "m3", "m4"],
-                       ["m1", "m2", "m3", "m4"]),
+    State =
+        base_state(rollback, {to, "m3"}, ["m1", "m2", "m3", "m4"], ["m1", "m2", "m3", "m4"]),
     {ok, Plan} = dbmigrate_plan:resolve(State),
     ?assertEqual(["m4", "m3"], maps:get(selected, Plan)),
     ?assertEqual(["m1", "m2"], maps:get(applied, Plan)).
@@ -91,21 +91,23 @@ rollback_to_not_found_test() ->
     ?assertEqual({error, migration_not_found}, dbmigrate_plan:resolve(State)).
 
 rollback_app_version_test() ->
-    State = #{action => rollback,
-              mode => app_version,
-              migrations_available => ["m1", "m2", "m3"],
-              migrations_applied => ["m1", "m2", "m3"],
-              migrations_applied_by_version => ["m2", "m3"]},
+    State =
+        #{action => rollback,
+          mode => app_version,
+          migrations_available => ["m1", "m2", "m3"],
+          migrations_applied => ["m1", "m2", "m3"],
+          migrations_applied_by_version => ["m2", "m3"]},
     {ok, Plan} = dbmigrate_plan:resolve(State),
     ?assertEqual(["m3", "m2"], maps:get(selected, Plan)),
     ?assertEqual(["m1"], maps:get(applied, Plan)).
 
 rollback_app_version_empty_test() ->
-    State = #{action => rollback,
-              mode => app_version,
-              migrations_available => ["m1", "m2"],
-              migrations_applied => ["m1", "m2"],
-              migrations_applied_by_version => []},
+    State =
+        #{action => rollback,
+          mode => app_version,
+          migrations_available => ["m1", "m2"],
+          migrations_applied => ["m1", "m2"],
+          migrations_applied_by_version => []},
     {ok, Plan} = dbmigrate_plan:resolve(State),
     ?assertEqual([], maps:get(selected, Plan)),
     ?assertEqual(["m1", "m2"], maps:get(applied, Plan)).

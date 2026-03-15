@@ -15,7 +15,9 @@
          rollback_to/1, rollback_to/3]).
 
 -ifdef(TEST).
+
 -compile([export_all]).
+
 -endif.
 
 -define(APP, ?MODULE).
@@ -38,10 +40,12 @@ gen_migration(App, Db, Name)
     when is_atom(App) andalso is_atom(Db) andalso is_list(Name) ->
     Adapter = init_backend(App, Db),
     Path = dbmigrate_loader:migrations_path(App, Db),
-    FileName = dbmigrate_loader:generate_version()
-               ++ "_"
-               ++ dbmigrate_loader:underscore(string:to_lower(Name))
-               ++ ".erl",
+    FileName =
+        dbmigrate_loader:generate_version()
+        ++ "_"
+        ++ dbmigrate_loader:underscore(
+               string:to_lower(Name))
+        ++ ".erl",
     FilePath = filename:join(Path, FileName),
     ok = file:write_file(FilePath, Adapter:file_template(FileName)),
     {ok, FilePath}.
@@ -158,23 +162,25 @@ run_request(#{app := App, backend := Backend} = Req) ->
         AppVersion = maps:get(app_version, Req, undefined),
         AppliedByVersion = fetch_versioned_applied(Adapter, Conn, App, Backend, AppVersion),
 
-        PlanInput = Req#{migrations_available => Available,
-                         migrations_applied => Applied,
-                         migrations_applied_by_version => AppliedByVersion},
+        PlanInput =
+            Req#{migrations_available => Available,
+                 migrations_applied => Applied,
+                 migrations_applied_by_version => AppliedByVersion},
 
         {ok, Plan} = dbmigrate_plan:resolve(PlanInput),
 
-        RunCtx = #{adapter => Adapter,
-                   conn => Conn,
-                   app => App,
-                   backend => Backend,
-                   app_version => AppVersion,
-                   skip_run => maps:get(skip_run, Req, false),
-                   migrations_path => Path,
-                   migration_run_fn => migration_run_fn(),
-                   rollback_run_fn => rollback_run_fn(),
-                   action => maps:get(action, Plan),
-                   selected => maps:get(selected, Plan)},
+        RunCtx =
+            #{adapter => Adapter,
+              conn => Conn,
+              app => App,
+              backend => Backend,
+              app_version => AppVersion,
+              skip_run => maps:get(skip_run, Req, false),
+              migrations_path => Path,
+              migration_run_fn => migration_run_fn(),
+              rollback_run_fn => rollback_run_fn(),
+              action => maps:get(action, Plan),
+              selected => maps:get(selected, Plan)},
 
         dbmigrate_runner:execute(RunCtx)
     after
@@ -273,29 +279,32 @@ dispatch_legacy(Action, Mode, Env) ->
       migrations_path := Path,
       migrations_applied := Applied,
       migrations_not_applied := NotApplied,
-      migrations_applied_by_version := AppliedByVersion} = Env,
+      migrations_applied_by_version := AppliedByVersion} =
+        Env,
 
-    PlanInput = #{action => Action,
-                  mode => Mode,
-                  migrations_available => lists:sort(Applied ++ NotApplied),
-                  migrations_applied => Applied,
-                  migrations_applied_by_version => AppliedByVersion},
+    PlanInput =
+        #{action => Action,
+          mode => Mode,
+          migrations_available => lists:sort(Applied ++ NotApplied),
+          migrations_applied => Applied,
+          migrations_applied_by_version => AppliedByVersion},
 
     case dbmigrate_plan:resolve(PlanInput) of
         {error, _} = Err ->
             Err;
         {ok, #{selected := Selected}} ->
-            RunCtx = #{adapter => Adapter,
-                       conn => Conn,
-                       app => App,
-                       backend => Backend,
-                       app_version => AppVersion,
-                       skip_run => SkipRun,
-                       migrations_path => Path,
-                       migration_run_fn => migration_run_fn(),
-                       rollback_run_fn => rollback_run_fn(),
-                       action => Action,
-                       selected => Selected},
+            RunCtx =
+                #{adapter => Adapter,
+                  conn => Conn,
+                  app => App,
+                  backend => Backend,
+                  app_version => AppVersion,
+                  skip_run => SkipRun,
+                  migrations_path => Path,
+                  migration_run_fn => migration_run_fn(),
+                  rollback_run_fn => rollback_run_fn(),
+                  action => Action,
+                  selected => Selected},
 
             {ok, Processed} = dbmigrate_runner:execute(RunCtx),
 
@@ -305,34 +314,44 @@ dispatch_legacy(Action, Mode, Env) ->
                 {specific, _} ->
                     {ok, Processed, Env};
                 _ ->
-                    NewApplied = case Action of
-                                     migrate ->
-                                         lists:sort(Applied ++ Processed);
-                                     rollback ->
-                                         lists:sort(Applied -- Processed)
-                                 end,
-                    NewNotApplied = case Action of
-                                        migrate ->
-                                            lists:sort(NotApplied -- Processed);
-                                        rollback ->
-                                            lists:sort(NotApplied ++ Processed)
-                                    end,
-                    NewByVersion = case Action of
-                                       migrate -> AppliedByVersion;
-                                       rollback -> lists:sort(AppliedByVersion -- Processed)
-                                   end,
+                    NewApplied =
+                        case Action of
+                            migrate ->
+                                lists:sort(Applied ++ Processed);
+                            rollback ->
+                                lists:sort(Applied -- Processed)
+                        end,
+                    NewNotApplied =
+                        case Action of
+                            migrate ->
+                                lists:sort(NotApplied -- Processed);
+                            rollback ->
+                                lists:sort(NotApplied ++ Processed)
+                        end,
+                    NewByVersion =
+                        case Action of
+                            migrate ->
+                                AppliedByVersion;
+                            rollback ->
+                                lists:sort(AppliedByVersion -- Processed)
+                        end,
 
-                    {ok, Processed,
+                    {ok,
+                     Processed,
                      Env#{migrations_applied => NewApplied,
                           migrations_not_applied => NewNotApplied,
                           migrations_applied_by_version => NewByVersion}}
             end
     end.
 
-ensure_integer(N) when is_integer(N) -> N;
-ensure_integer(N) when is_list(N) -> list_to_integer(N).
+ensure_integer(N) when is_integer(N) ->
+    N;
+ensure_integer(N) when is_list(N) ->
+    list_to_integer(N).
 
-ensure_list(V) when is_list(V) -> V;
-ensure_list(V) when is_binary(V) -> binary_to_list(V).
+ensure_list(V) when is_list(V) ->
+    V;
+ensure_list(V) when is_binary(V) ->
+    binary_to_list(V).
 
 -endif.
