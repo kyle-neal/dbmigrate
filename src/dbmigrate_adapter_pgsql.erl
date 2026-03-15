@@ -5,7 +5,10 @@
 %% API
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_start/1, transaction_end/1, file_template/1]).
+         transaction_begin/1, transaction_commit/1, acquire_lock/1, release_lock/1,
+         file_template/1]).
+
+-define(MIGRATIONS_TABLE, "public.dbmigrate_schema_migrations").
 
 %%%===================================================================
 %%% API
@@ -125,9 +128,10 @@ close(Conn) ->
 
 ensure_repo(App, Db) ->
     Conn = connect(App, Db),
+    {ok, _, _} = epgsql:squery(Conn, "SET search_path TO public"),
     {ok, _, _} =
         epgsql:squery(Conn,
-                      "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                      "CREATE TABLE IF NOT EXISTS " ?MIGRATIONS_TABLE " ("
                       "  version character varying PRIMARY KEY,"
                       "  inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
                       "  app_name character varying NULL,"
@@ -138,8 +142,8 @@ ensure_repo(App, Db) ->
 migrations_applied(Conn, AppName, Type) ->
     {ok, _, Res} =
         epgsql:equery(Conn,
-                      "SELECT version"
-                      " FROM schema_migrations "
+                      "SELECT version::text"
+                      " FROM " ?MIGRATIONS_TABLE " "
                       " WHERE (app_name = $1 OR app_name IS NULL) "
                       "   AND (type = $2 OR type IS NULL)",
                       [AppName, Type]),
@@ -149,8 +153,8 @@ migrations_applied(Conn, AppName, Type) ->
 migrations_applied_by_version(Conn, AppName, Type, AppVersion) ->
     {ok, _, Res} =
         epgsql:equery(Conn,
-                      "SELECT version"
-                      " FROM schema_migrations "
+                      "SELECT version::text"
+                      " FROM " ?MIGRATIONS_TABLE " "
                       " WHERE (app_name = $1 OR app_name IS NULL) "
                       "   AND (type = $2 OR type IS NULL)"
                       "   AND app_version = $3",
@@ -162,7 +166,7 @@ migrations_upgrade(Conn, Version, AppName, Type, AppVersionOverwrite) ->
     AppVsn = dbmigrate_utils:get_app_version(AppName, AppVersionOverwrite),
     {ok, _} =
         epgsql:equery(Conn,
-                      "INSERT INTO schema_migrations"
+                      "INSERT INTO " ?MIGRATIONS_TABLE
                       "  (version, inserted_at, app_name, app_version, type)"
                       "  VALUES ($1, current_timestamp, $2, $3, $4)",
                       [Version, AppName, AppVsn, Type]),
@@ -171,17 +175,26 @@ migrations_upgrade(Conn, Version, AppName, Type, AppVersionOverwrite) ->
 migrations_downgrade(Conn, Version) ->
     {ok, _} =
         epgsql:equery(Conn,
-                      "DELETE FROM schema_migrations"
+                      "DELETE FROM " ?MIGRATIONS_TABLE
                       "  WHERE version = $1",
                       [Version]),
     ok.
 
-transaction_start(Conn) ->
+transaction_begin(Conn) ->
     {ok, _, _} = epgsql:squery(Conn, "BEGIN;"),
     ok.
 
-transaction_end(Conn) ->
+transaction_commit(Conn) ->
     {ok, _, _} = epgsql:squery(Conn, "COMMIT;"),
+    ok.
+
+%% Advisory lock using a fixed key derived from 'dbmigrate'.
+acquire_lock(Conn) ->
+    {ok, _, [{true}]} = epgsql:squery(Conn, "SELECT pg_advisory_lock(73571);"),
+    ok.
+
+release_lock(Conn) ->
+    {ok, _, [{true}]} = epgsql:squery(Conn, "SELECT pg_advisory_unlock(73571);"),
     ok.
 
 file_template(FileName) ->

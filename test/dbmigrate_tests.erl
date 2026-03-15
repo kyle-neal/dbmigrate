@@ -2,8 +2,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
--export([init/0, connect/2, close/1, ensure_repo/2, file_template/1, transaction_start/1,
-         migrations_upgrade/5, migrations_downgrade/2, transaction_end/1]).
+-export([init/0, connect/2, close/1, ensure_repo/2, file_template/1, transaction_begin/1,
+         migrations_upgrade/5, migrations_downgrade/2, transaction_commit/1]).
 
 init() ->
     ok.
@@ -20,7 +20,7 @@ ensure_repo(_, _) ->
 file_template(FileName) ->
     dbmigrate_adapter_pgsql:file_template(FileName).
 
-transaction_start(_) ->
+transaction_begin(_) ->
     ok.
 
 migrations_upgrade(_, _, _, _, _) ->
@@ -29,7 +29,7 @@ migrations_upgrade(_, _, _, _, _) ->
 migrations_downgrade(_, _) ->
     ok.
 
-transaction_end(_) ->
+transaction_commit(_) ->
     ok.
 
 -define(env(Applied, NotApplied, AppVersion, SkipRun),
