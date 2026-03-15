@@ -53,9 +53,32 @@ Each migration module must export:
 
 ## Add dbmigrate to your app
 
-In your project rebar.config, add dbmigrate as a dependency and ensure you include backend deps as needed.
+Set the app up in four steps:
 
-In your application app.src, add dbmigrate to applications if your release starts it directly.
+1. Add dbmigrate to your project dependencies.
+2. Ensure your target application starts dbmigrate.
+3. Configure the target application's `migrate` env.
+4. Place migration files under `priv/migrations/<backend>/`.
+
+### Example in rebar.config
+
+~~~erlang
+{deps,
+ [{dbmigrate, {git, "https://github.com/your-org/dbmigrate.git", {tag, "<version>"}}}]}. 
+~~~
+
+Include the backend dependencies you need in the same project or release.
+
+### Example in your app.src
+
+~~~erlang
+{application, mmerl_core,
+ [{description, "MMERL Core"},
+	{vsn, "1.0.0"},
+	{applications, [kernel, stdlib, dbmigrate]}]}. 
+~~~
+
+The migration configuration must be defined on the application being migrated, not on dbmigrate itself.
 
 ## Configuration
 
@@ -79,19 +102,21 @@ That means settings should live under your app (for example mmerl_core), not und
 				{username, "postgres"},
 				{password, "postgres"},
 				{database, "mmerl_core"},
+				{migrations_table, "schema_migrations"},
 				{timeout, 5000}]},
 			{cassandra,
 			 [{adapter, dbmigrate_adapter_cassandra},
 				{host, "127.0.0.1"},
 				{port, 9042},
-				{keyspace, "mmerl_core"}]},
+				{keyspace, "mmerl_core"},
+				{migrations_table, "schema_migrations"}]},
 			{elasticsearch,
 			 [{adapter, dbmigrate_adapter_elasticsearch},
 				{host, "127.0.0.1"},
 				{port, 9200},
 				{index_name, "mmerl_core"},
 				{type_name, "_doc"},
-				{migrations_index, "mmerl_migrations"}]}]}]}]}.
+				{migrations_index, "schema_migrations"}]}]}]}]}.
 ~~~
 
 ### Example in config/sys.config
@@ -107,6 +132,7 @@ That means settings should live under your app (for example mmerl_core), not und
 			 {username, "postgres"},
 			 {password, "postgres"},
 			 {database, "mmerl_core"},
+			 {migrations_table, "schema_migrations"},
 			 {timeout, 5000},
 			 {ssl, false}]}
 		]}]}
@@ -116,6 +142,39 @@ That means settings should live under your app (for example mmerl_core), not und
 Notes:
 - You can override the default migration path with migrate_path in backend config.
 - PostgreSQL adapter also supports ssl, verify, cacertfile, depth, and server_name_indication.
+- PostgreSQL and Cassandra use `migrations_table` for the migration tracking table. The default is `"schema_migrations"`.
+- Elasticsearch uses `migrations_index` for the migration tracking index. The default is `"schema_migrations"`.
+
+### Full backend example
+
+~~~erlang
+[
+ {mmerl_core,
+	[{migrate,
+		[{pgsql,
+			[{adapter, dbmigrate_adapter_pgsql},
+			 {host, "127.0.0.1"},
+			 {port, 5432},
+			 {username, "postgres"},
+			 {password, "postgres"},
+			 {database, "mmerl_core"},
+			 {migrations_table, "schema_migrations"},
+			 {timeout, 5000}]},
+		 {cassandra,
+			[{adapter, dbmigrate_adapter_cassandra},
+			 {host, "127.0.0.1"},
+			 {port, 9042},
+			 {keyspace, "mmerl_core"},
+			 {migrations_table, "schema_migrations"}]},
+		 {elasticsearch,
+			[{adapter, dbmigrate_adapter_elasticsearch},
+			 {host, "127.0.0.1"},
+			 {port, 9200},
+			 {index_name, "mmerl_core"},
+			 {type_name, "_doc"},
+			 {migrations_index, "schema_migrations"}]}]}]}
+].
+~~~
 
 ## Creating migrations
 

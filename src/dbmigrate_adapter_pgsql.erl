@@ -5,10 +5,17 @@
 %% API
 -export([init/0, connect/2, close/1, ensure_repo/2, migrations_applied/3,
          migrations_applied_by_version/4, migrations_upgrade/5, migrations_downgrade/2,
-         transaction_begin/1, transaction_commit/1, acquire_lock/1, release_lock/1,
-         file_template/1]).
+         transaction_begin/1, transaction_commit/1, transaction_start/1, transaction_end/1,
+         acquire_lock/1, release_lock/1, file_template/1]).
 
--define(MIGRATIONS_TABLE, "public.dbmigrate_schema_migrations").
+-define(DEFAULT_MIGRATIONS_TABLE, "schema_migrations").
+
+-ifdef(TEST).
+
+-export([configured_migrations_table/1, migrations_table_name/1, store_migrations_table/2,
+         erase_migrations_table/1]).
+
+-endif.
 
 %%%===================================================================
 %%% API
@@ -25,6 +32,7 @@ connect(App, DbName) ->
     Pass = proplists:get_value(password, AppOpts),
     Db = proplists:get_value(database, AppOpts),
     Timeout = proplists:get_value(timeout, AppOpts),
+    MigrationsTable = configured_migrations_table(AppOpts),
     Opts0 = [{port, Port}, {database, Db}, {timeout, Timeout}],
 
     %% SSL detection and forwarding
@@ -121,62 +129,75 @@ connect(App, DbName) ->
 
     Opts = Opts0 ++ SslConnectOpts,
     {ok, Conn} = epgsql:connect(Host, User, Pass, Opts),
+    ok = store_migrations_table(Conn, MigrationsTable),
     Conn.
 
 close(Conn) ->
+    ok = erase_migrations_table(Conn),
     epgsql:close(Conn).
 
 ensure_repo(App, Db) ->
     Conn = connect(App, Db),
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _, _} = epgsql:squery(Conn, "SET search_path TO public"),
     {ok, _, _} =
         epgsql:squery(Conn,
-                      "CREATE TABLE IF NOT EXISTS " ?MIGRATIONS_TABLE " ("
-                      "  version character varying PRIMARY KEY,"
-                      "  inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
-                      "  app_name character varying NULL,"
-                      "  app_version character varying NULL,"
-                      "  type character varying NULL)"),
+                      lists:flatten(["CREATE TABLE IF NOT EXISTS ",
+                                     MigrationsTable,
+                                     " ("
+                                     "  version character varying PRIMARY KEY,"
+                                     "  inserted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+                                     "  app_name character varying NULL,"
+                                     "  app_version character varying NULL,"
+                                     "  type character varying NULL)"])),
     close(Conn).
 
 migrations_applied(Conn, AppName, Type) ->
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _, Res} =
         epgsql:equery(Conn,
                       "SELECT version::text"
-                      " FROM " ?MIGRATIONS_TABLE " "
-                      " WHERE (app_name = $1 OR app_name IS NULL) "
-                      "   AND (type = $2 OR type IS NULL)",
+                      " FROM "
+                      ++ MigrationsTable
+                      ++ " "
+                         " WHERE (app_name = $1 OR app_name IS NULL) "
+                         "   AND (type = $2 OR type IS NULL)",
                       [AppName, Type]),
     Versions = lists:map(fun({V}) -> binary_to_list(V) end, Res),
     lists:sort(Versions).
 
 migrations_applied_by_version(Conn, AppName, Type, AppVersion) ->
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _, Res} =
         epgsql:equery(Conn,
                       "SELECT version::text"
-                      " FROM " ?MIGRATIONS_TABLE " "
-                      " WHERE (app_name = $1 OR app_name IS NULL) "
-                      "   AND (type = $2 OR type IS NULL)"
-                      "   AND app_version = $3",
+                      " FROM "
+                      ++ MigrationsTable
+                      ++ " "
+                         " WHERE (app_name = $1 OR app_name IS NULL) "
+                         "   AND (type = $2 OR type IS NULL)"
+                         "   AND app_version = $3",
                       [AppName, Type, AppVersion]),
     Versions = lists:map(fun({V}) -> binary_to_list(V) end, Res),
     lists:sort(Versions).
 
 migrations_upgrade(Conn, Version, AppName, Type, AppVersionOverwrite) ->
     AppVsn = dbmigrate_utils:get_app_version(AppName, AppVersionOverwrite),
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _} =
         epgsql:equery(Conn,
-                      "INSERT INTO " ?MIGRATIONS_TABLE
-                      "  (version, inserted_at, app_name, app_version, type)"
-                      "  VALUES ($1, current_timestamp, $2, $3, $4)",
+                      "INSERT INTO "
+                      ++ MigrationsTable
+                      ++ "  (version, inserted_at, app_name, app_version, type)"
+                         "  VALUES ($1, current_timestamp, $2, $3, $4)",
                       [Version, AppName, AppVsn, Type]),
     ok.
 
 migrations_downgrade(Conn, Version) ->
+    MigrationsTable = migrations_table_name(Conn),
     {ok, _} =
         epgsql:equery(Conn,
-                      "DELETE FROM " ?MIGRATIONS_TABLE
-                      "  WHERE version = $1",
+                      "DELETE FROM " ++ MigrationsTable ++ "  WHERE version = $1",
                       [Version]),
     ok.
 
@@ -186,6 +207,12 @@ transaction_begin(Conn) ->
 
 transaction_commit(Conn) ->
     {ok, _, _} = epgsql:squery(Conn, "COMMIT;"),
+    ok.
+
+transaction_start(_Conn) ->
+    ok.
+
+transaction_end(_Conn) ->
     ok.
 
 %% Advisory lock using a fixed key derived from 'dbmigrate'.
@@ -209,3 +236,31 @@ file_template(FileName) ->
      "down(Conn) ->\n",
      "    %% write queries here\n"
      "    ok.\n\n"].
+
+configured_migrations_table(AppOpts) ->
+    normalize_repo_name(proplists:get_value(migrations_table,
+                                            AppOpts,
+                                            ?DEFAULT_MIGRATIONS_TABLE)).
+
+migrations_table_name(Conn) ->
+    case get({?MODULE, migrations_table, Conn}) of
+        undefined ->
+            ?DEFAULT_MIGRATIONS_TABLE;
+        MigrationsTable ->
+            MigrationsTable
+    end.
+
+store_migrations_table(Conn, MigrationsTable) ->
+    put({?MODULE, migrations_table, Conn}, normalize_repo_name(MigrationsTable)),
+    ok.
+
+erase_migrations_table(Conn) ->
+    erase({?MODULE, migrations_table, Conn}),
+    ok.
+
+normalize_repo_name(Name) when is_binary(Name) ->
+    binary_to_list(Name);
+normalize_repo_name(Name) when is_atom(Name) ->
+    atom_to_list(Name);
+normalize_repo_name(Name) ->
+    Name.
